@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "798574238093",
+    "project_id": "hrclient-bee8d",
+    "storage_bucket": "hrclient-bee8d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:798574238093:android:a3d795fdda74efbf8a45c4",
+        "android_client_info": {
+          "package_name": "com.example.inexo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAGm_sg2qBxlciWWsa-aFwde05brFb8DY4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
