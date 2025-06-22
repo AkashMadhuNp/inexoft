@@ -440,119 +440,244 @@ class _PendingLeaveDetailsState extends State<PendingLeaveDetails> {
     );
   }
 
-  Future<void> _handleLeaveAction(Map<String, dynamic> leave, String action, {String? rejectionReason}) async {
-    try {
-      if (!mounted) return;
-      
-      // Show loading indicator
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+ // Replace the _handleLeaveAction method with this simplified version
 
-      String userId = leave['userId'];
-      String docId = leave['docId']; // Use the actual document ID for deletion
-      String leaveId = leave['leaveId'] ?? docId; // Use leaveId if available, otherwise docId
-      
-      // Create batch for atomic operations
-      WriteBatch batch = _firestore.batch();
+Future<void> _handleLeaveAction(Map<String, dynamic> leave, String action, {String? rejectionReason}) async {
+  try {
+    if (!mounted) return;
+    
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
 
-      // Create a copy of the leave data without the docId and userId fields
-      Map<String, dynamic> processedLeaveData = Map<String, dynamic>.from(leave);
-      processedLeaveData.remove('docId'); // Remove internal docId
-      processedLeaveData.remove('userId'); // Remove internal userId
-      
-      if (action == 'Approved') {
-        // Add to leave_approved collection
-        DocumentReference approvedRef = _firestore
-            .collection('leave_approved')
-            .doc(userId)
-            .collection('applications')
-            .doc(leaveId);
-        
-        batch.set(approvedRef, {
-          ...processedLeaveData,
-          'status': 'Approved',
-          'approvedAt': FieldValue.serverTimestamp(),
-          'processedAt': FieldValue.serverTimestamp(),
-          'processedBy': 'Admin', // You can get actual admin info here
-        });
+    String userId = leave['userId'];
+    String docId = leave['docId']; // Use the actual document ID for deletion
+    String leaveId = leave['leaveId'] ?? docId; // Use leaveId if available, otherwise docId
+    
+    // Create batch for atomic operations
+    WriteBatch batch = _firestore.batch();
 
-      } else if (action == 'Rejected') {
-        // Add to leave_rejected collection
-        DocumentReference rejectedRef = _firestore
-            .collection('leave_rejected')
-            .doc(userId)
-            .collection('applications')
-            .doc(leaveId);
-        
-        batch.set(rejectedRef, {
-          ...processedLeaveData,
-          'status': 'Rejected',
-          'rejectionReason': rejectionReason ?? 'No reason provided',
-          'rejectedAt': FieldValue.serverTimestamp(),
-          'processedAt': FieldValue.serverTimestamp(),
-          'processedBy': 'Admin', // You can get actual admin info here
-        });
+    // Create a copy of the leave data without the docId and userId fields
+    Map<String, dynamic> processedLeaveData = Map<String, dynamic>.from(leave);
+    processedLeaveData.remove('docId'); // Remove internal docId
+    processedLeaveData.remove('userId'); // Remove internal userId
+    
+    if (action == 'Approved') {
+      // Calculate leave quota fields
+      const int leaveQuota = 24; // Fixed constant value
+      
+      // Get current application's working days - safer conversion
+      dynamic workingDaysValue = leave['numberOfWorkingDays'] ?? 0;
+      int currentWorkingDays = 0;
+      if (workingDaysValue is int) {
+        currentWorkingDays = workingDaysValue;
+      } else if (workingDaysValue is double) {
+        currentWorkingDays = workingDaysValue.toInt();
+      } else if (workingDaysValue is String) {
+        currentWorkingDays = int.tryParse(workingDaysValue) ?? 0;
       }
-
-      // Remove from leave_applications using the correct docId
-      DocumentReference pendingRef = _firestore
-          .collection('leave_applications')
+      
+      // Get existing approved leaves count for this user to calculate total taken
+      QuerySnapshot existingApproved = await _firestore
+          .collection('leave_approved')
           .doc(userId)
           .collection('applications')
-          .doc(docId); // Use docId for deletion
+          .get();
       
-      batch.delete(pendingRef);
-
-      // Update all collection counts
-      await _updateCollectionCounts(batch, userId, leave, action);
-
-      // Commit the batch
-      await batch.commit();
-
-      // Close loading indicator
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-
-      // Refresh the list
-      if (mounted) {
-        await _fetchPendingLeaves();
-      }
-
-      // Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Leave request ${action.toLowerCase()} successfully'),
-            backgroundColor: action == 'Approved' ? Colors.green : Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      // Close loading indicator
-      if (mounted) {
-        Navigator.of(context).pop();
+      // Calculate total working days from all previously approved leaves
+      int totalPreviousWorkingDays = 0;
+      for (var doc in existingApproved.docs) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        dynamic workingDays = data['numberOfWorkingDays'] ?? 0;
+        
+        if (workingDays is int) {
+          totalPreviousWorkingDays += workingDays;
+        } else if (workingDays is double) {
+          totalPreviousWorkingDays += workingDays.toInt();
+        } else if (workingDays is String) {
+          totalPreviousWorkingDays += int.tryParse(workingDays) ?? 0;
+        }
       }
       
-      print('Error ${action.toLowerCase()}ing leave: $e');
+      // Calculate total leave taken (including current application)
+      int totalLeaveTaken = totalPreviousWorkingDays + currentWorkingDays;
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to ${action.toLowerCase()} leave request: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+      // Calculate leave left
+      int leaveLeft = leaveQuota - totalLeaveTaken;
+      
+      // Add to leave_approved collection with all user data and quota information
+      DocumentReference approvedRef = _firestore
+          .collection('leave_approved')
+          .doc(userId)
+          .collection('applications')
+          .doc(leaveId);
+      
+      batch.set(approvedRef, {
+        ...processedLeaveData,
+        'status': 'Approved',
+        'approvedAt': FieldValue.serverTimestamp(),
+        'processedAt': FieldValue.serverTimestamp(),
+        'processedBy': 'Admin', // You can get actual admin info here
+        // Leave Quota Information
+        'leaveQuota': leaveQuota,
+        'numberOfLeaveTaken': totalLeaveTaken,
+        'leaveLeft': leaveLeft,
+        'currentApplicationWorkingDays': currentWorkingDays,
+        'previousLeaveTaken': totalPreviousWorkingDays,
+        // User Information (ensure all user data is preserved)
+        'employeeId': leave['employeeId'] ?? '',
+        'employeeName': leave['employeeName'] ?? '',
+        'employeeEmail': leave['employeeEmail'] ?? '',
+        'department': leave['department'] ?? '',
+        'position': leave['position'] ?? '',
+        'uid': leave['uid'] ?? userId,
+      });
+
+      // Update the main user document in leave_approved collection with summary data
+      DocumentReference userSummaryRef = _firestore
+          .collection('leave_approved')
+          .doc(userId);
+      
+      batch.set(userSummaryRef, {
+        // User Information
+        'employeeId': leave['employeeId'] ?? '',
+        'employeeName': leave['employeeName'] ?? '',
+        'employeeEmail': leave['employeeEmail'] ?? '',
+        'department': leave['department'] ?? '',
+        'position': leave['position'] ?? '',
+        'uid': leave['uid'] ?? userId,
+        
+        // Leave Quota Summary
+        'leaveQuota': leaveQuota,
+        'totalLeaveTaken': totalLeaveTaken,
+        'leaveLeft': leaveLeft,
+        'totalApplications': FieldValue.increment(1),
+        'totalApproved': FieldValue.increment(1),
+        
+        // Timestamps
+        'lastApprovedDate': FieldValue.serverTimestamp(),
+        'lastUpdated': FieldValue.serverTimestamp(),
+        'firstApprovedDate': FieldValue.serverTimestamp(), // Will only set if document doesn't exist
+      }, SetOptions(merge: true));
+
+    } else if (action == 'Rejected') {
+      // Add to leave_rejected collection
+      DocumentReference rejectedRef = _firestore
+          .collection('leave_rejected')
+          .doc(userId)
+          .collection('applications')
+          .doc(leaveId);
+      
+      batch.set(rejectedRef, {
+        ...processedLeaveData,
+        'status': 'Rejected',
+        'rejectionReason': rejectionReason ?? 'No reason provided',
+        'rejectedAt': FieldValue.serverTimestamp(),
+        'processedAt': FieldValue.serverTimestamp(),
+        'processedBy': 'Admin', // You can get actual admin info here
+        // Preserve user information
+        'employeeId': leave['employeeId'] ?? '',
+        'employeeName': leave['employeeName'] ?? '',
+        'employeeEmail': leave['employeeEmail'] ?? '',
+        'department': leave['department'] ?? '',
+        'position': leave['position'] ?? '',
+        'uid': leave['uid'] ?? userId,
+      });
+
+      // Update the main user document in leave_rejected collection with summary data
+      DocumentReference rejectedSummaryRef = _firestore
+          .collection('leave_rejected')
+          .doc(userId);
+      
+      batch.set(rejectedSummaryRef, {
+        // User Information
+        'employeeId': leave['employeeId'] ?? '',
+        'employeeName': leave['employeeName'] ?? '',
+        'employeeEmail': leave['employeeEmail'] ?? '',
+        'department': leave['department'] ?? '',
+        'position': leave['position'] ?? '',
+        'uid': leave['uid'] ?? userId,
+        
+        // Rejection Summary
+        'totalApplications': FieldValue.increment(1),
+        'totalRejected': FieldValue.increment(1),
+        
+        // Timestamps
+        'lastRejectedDate': FieldValue.serverTimestamp(),
+        'lastUpdated': FieldValue.serverTimestamp(),
+        'firstRejectedDate': FieldValue.serverTimestamp(), // Will only set if document doesn't exist
+      }, SetOptions(merge: true));
+    }
+
+    // Remove from leave_applications using the correct docId
+    DocumentReference pendingRef = _firestore
+        .collection('leave_applications')
+        .doc(userId)
+        .collection('applications')
+        .doc(docId); // Use docId for deletion
+    
+    batch.delete(pendingRef);
+
+    // Update leave_applications summary (decrement pending count)
+    DocumentReference leaveAppSummaryRef = _firestore
+        .collection('leave_applications')
+        .doc(userId);
+    
+    batch.update(leaveAppSummaryRef, {
+      'totalApplications': FieldValue.increment(-1),
+      'lastUpdated': FieldValue.serverTimestamp(),
+    });
+
+    // Commit the batch
+    await batch.commit();
+
+    // Close loading indicator
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+
+    // Refresh the list
+    if (mounted) {
+      await _fetchPendingLeaves();
+    }
+
+    // Show success message
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Leave request ${action.toLowerCase()} successfully'),
+          backgroundColor: action == 'Approved' ? Colors.green : Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  } catch (e) {
+    // Close loading indicator
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+    
+    print('Error ${action.toLowerCase()}ing leave: $e');
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to ${action.toLowerCase()} leave request: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
   }
+}
+
+// You can also remove the _updateCollectionCounts method since we're not using it anymore
+
 
   Widget _buildDetailSection(String title, List<Widget> items) {
     return Column(

@@ -4,12 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:inexo/screens/hr/bottom_sheet.dart';
 import 'package:inexo/screens/hr/leaveOverview/leave_overview.dart';
-import 'package:inexo/services/validation_service.dart';
 import 'package:inexo/widgets/hr_dashboard/appbar.dart';
 import 'package:inexo/widgets/hr_dashboard/profile_card.dart';
 import 'package:inexo/widgets/hr_dashboard/section_header.dart';
 import 'package:inexo/widgets/hr_dashboard/stat_grid.dart';
-import 'package:inexo/widgets/signUp/custom_text_field.dart';
 
 class HrDashboard extends StatefulWidget {
   const HrDashboard({super.key});
