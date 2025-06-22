@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:inexo/screens/hr/attendanceEntireDetail/attendance_calender.dart';
 import 'package:inexo/screens/hr/bottom_sheet.dart';
 import 'package:inexo/screens/hr/leaveOverview/leave_overview.dart';
+import 'package:inexo/screens/login_screen.dart';
 import 'package:inexo/widgets/hr_dashboard/appbar.dart';
 import 'package:inexo/widgets/hr_dashboard/profile_card.dart';
 import 'package:inexo/widgets/hr_dashboard/section_header.dart';
@@ -120,16 +122,93 @@ class _HrDashboardState extends State<HrDashboard> {
       case 'Settings':
         break;
       case 'Logout':
-        _handleLogout();
+        _showLogoutDialog();
         break;
     }
+  }
+
+  // Show logout confirmation dialog
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Prevents dismissing by tapping outside
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.logout,
+                color: const Color(0xFF1976D2),
+                size: 24,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Sign Out',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF1976D2),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Are you sure you want to sign out of your account?',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[700],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+              },
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+                _handleLogout(); // Proceed with logout
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1976D2),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+              child: Text(
+                'Sign Out',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _handleLogout() async {
     try {
       await _auth.signOut();
-      // Navigate to login screen
-      // Navigator.of(context).pushReplacementNamed('/login');
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => LoginScreen()),
+      );
     } catch (e) {
       print('Error logging out: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -148,6 +227,16 @@ class _HrDashboardState extends State<HrDashboard> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => AddEmployeeBottomSheet(),
+    );
+  }
+
+  // Navigate to Attendance Calendar
+  void _navigateToAttendanceCalendar() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AttendanceCalendarScreen(),
+      ),
     );
   }
 
@@ -174,7 +263,7 @@ class _HrDashboardState extends State<HrDashboard> {
       ),
       body: _buildBody(size),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddEmployeeBottomSheet, // Changed this line
+        onPressed: _showAddEmployeeBottomSheet,
         backgroundColor: const Color(0xFF1976D2),
         child: Icon(Icons.add, color: Colors.white),
       ),
@@ -204,7 +293,37 @@ class _HrDashboardState extends State<HrDashboard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(height: 8),
-            HrProfileCard(hrInfo: hrInfo),
+            // Profile Card with Attendance Detail Button
+            Column(
+              children: [
+                HrProfileCard(hrInfo: hrInfo),
+                SizedBox(height: 16),
+                // Attendance Detail Button
+                Container(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _navigateToAttendanceCalendar,
+                    icon: Icon(Icons.calendar_today, size: 20),
+                    label: Text(
+                      'Attendance Detail',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1976D2),
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             SizedBox(height: 24),
             SectionHeader(
               title: "OVERVIEWS",
@@ -218,10 +337,10 @@ class _HrDashboardState extends State<HrDashboard> {
                   viewportFraction: 1.0,
                   enlargeCenterPage: false,
                   enableInfiniteScroll: false,
-                  autoPlay: true, // Enable auto-play
-                  autoPlayInterval: Duration(seconds: 3), // 3-second interval
-                  autoPlayAnimationDuration: Duration(milliseconds: 800), // Smooth transition
-                  autoPlayCurve: Curves.easeInOut, // Easing for transitions
+                  autoPlay: true,
+                  autoPlayInterval: Duration(seconds: 3),
+                  autoPlayAnimationDuration: Duration(milliseconds: 800),
+                  autoPlayCurve: Curves.easeInOut,
                 ),
                 items: [
                   // Dashboard Overview
@@ -266,5 +385,3 @@ class _HrDashboardState extends State<HrDashboard> {
     );
   }
 }
-
-

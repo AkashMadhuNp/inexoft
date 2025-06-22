@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:inexo/screens/employyee/employee_dashboard.dart';
 import 'package:inexo/screens/hr/hr_dashboard.dart';
+import 'package:inexo/screens/pending_approval_screen.dart';
 import 'package:inexo/services/auth_service.dart';
 import 'package:inexo/services/validation_service.dart';
 import 'package:inexo/widgets/signUp/custom_button.dart';
@@ -79,70 +80,91 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> _handleSignUp() async {
-    if (_selectedUserType == null) {
-      _showSnackBar('Please select your account type', Colors.red);
-      return;
-    }
+  if (_selectedUserType == null) {
+    _showSnackBar('Please select your account type', Colors.red);
+    return;
+  }
 
-    String? designationError = ValidationService.validateDesignation(_selectedUserType, _selectedDesignation);
-    if (designationError != null) {
-      _showSnackBar(designationError, Colors.red);
-      return;
-    }
+  String? designationError = ValidationService.validateDesignation(_selectedUserType, _selectedDesignation);
+  if (designationError != null) {
+    _showSnackBar(designationError, Colors.red);
+    return;
+  }
 
-    if (_formKey.currentState!.validate()) {
+  if (_formKey.currentState!.validate()) {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      String formattedName = ValidationService.formatName(_nameController.text.trim());
+      String email = _emailController.text.trim();
+      String password = _passwordController.text;
+
+      // Call Firebase signup
+      Map<String, dynamic> result = await _authService.signUp(
+        email: email,
+        password: password,
+        fullName: formattedName,
+        userType: _selectedUserType!,
+        designation: _selectedDesignation,
+      );
+
       setState(() {
-        _isLoading = true;
+        _isLoading = false;
       });
 
-      try {
-        String formattedName = ValidationService.formatName(_nameController.text.trim());
-        String email = _emailController.text.trim();
-        String password = _passwordController.text;
-
-        // Call Firebase signup
-        Map<String, dynamic> result = await _authService.signUp(
-          email: email,
-          password: password,
-          fullName: formattedName,
-          userType: _selectedUserType!,
-          designation: _selectedDesignation,
-        );
-
-        setState(() {
-          _isLoading = false;
-        });
-
-        if (result['success']) {
-          _showSnackBar(
-            'Account created successfully as ${_selectedUserType == 'hr' ? 'HR Manager' : 'Employee'}!\nWelcome, $formattedName!',
-            Colors.green,
-            duration: 3,
-          );
-
-          // Navigate to appropriate dashboard after a short delay
-          Future.delayed(const Duration(milliseconds: 1500), () {
-            _navigateToDashboard();
-          });
-        } else {
-          _showSnackBar(
-            result['error'] ?? 'Failed to create account. Please try again.',
-            Colors.red,
-            duration: 4,
-          );
-        }
-      } catch (e) {
-        setState(() {
-          _isLoading = false;
-        });
+      if (result['success']) {
         _showSnackBar(
-          'An unexpected error occurred. Please try again.',
-          Colors.red,
+          'Account created successfully as ${_selectedUserType == 'hr' ? 'HR Manager' : 'Employee'}!\nWelcome, $formattedName!',
+          Colors.green,
           duration: 3,
         );
+
+        // Navigate to appropriate dashboard after a short delay
+        // Pass the user from the result
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          _navigateToDashboard(result['user']);
+        });
+      } else {
+        _showSnackBar(
+          result['error'] ?? 'Failed to create account. Please try again.',
+          Colors.red,
+          duration: 4,
+        );
       }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      _showSnackBar(
+        'An unexpected error occurred. Please try again.',
+        Colors.red,
+        duration: 3,
+      );
     }
   }
+}
+
+void _navigateToDashboard(dynamic user) {
+  if (_selectedUserType == 'hr') {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => HrDashboard()),
+    );
+  } else if (_selectedUserType == 'employee') {
+    // New employees should go to pending approval screen
+    // since they are created with "pending" status
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PendingApprovalScreen(
+          user: user, // Pass the user from signup result
+        ),
+      ),
+    );
+  }
+}
 
 
   void _showSnackBar(String message, Color backgroundColor, {int duration = 2}) {
@@ -155,19 +177,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  void _navigateToDashboard() {
-    if (_selectedUserType == 'hr') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => HrDashboard()),
-      );
-    } else if (_selectedUserType == 'employee') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => EmployeeDashboard()),
-      );
-    }
-  }
+
 
   @override
   Widget build(BuildContext context) {

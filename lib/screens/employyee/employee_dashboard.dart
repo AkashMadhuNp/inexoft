@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:inexo/widgets/employee_dashboard/attendance_tab.dart';
+import 'package:inexo/screens/login_screen.dart';
+import 'package:inexo/widgets/employee_dashboard/attendance/attendance_tab.dart';
 
 import 'dart:async';
 
@@ -58,10 +59,72 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
     }
   }
 
+  Future<void> _showLogoutDialog() async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false, // User must tap button to dismiss
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.logout, color: Colors.red, size: 24),
+              SizedBox(width: 12),
+              Text(
+                'Confirm Logout',
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Are you sure you want to logout from your account?',
+            style: GoogleFonts.inter(fontSize: 16),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.inter(
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                'Logout',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _logout();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _logout() async {
     try {
       await _auth.signOut();
-      Navigator.of(context).pushReplacementNamed('/login');
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => LoginScreen(),));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -121,7 +184,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
             ),
           ),
           PopupMenuButton<String>(
-            onSelected: (value) => value == 'Logout' ? _logout() : null,
+            onSelected: (value) => value == 'Logout' ? _showLogoutDialog() : null,
             itemBuilder: (context) => [
               PopupMenuItem(value: 'Profile', child: Text('Profile')),
               PopupMenuItem(value: 'Settings', child: Text('Settings')),
